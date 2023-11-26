@@ -175,13 +175,29 @@ public class User
         }
     }
 
-    public List<Post> GetTimelinePosts()
+    public List<Post> GetTimelinePosts(List<User> userList)
     {
         List<Post> timelinePosts = new List<Post>();
 
         foreach (var user in Following)
         {
-            timelinePosts.AddRange(user.Posts);
+            foreach (var post in user.Posts)
+            {
+                if (post.IsPublic || post.whitelist.Contains(this))
+                {
+                    timelinePosts.Add(post);
+                }
+            }
+        }
+        foreach (var user in userList)
+        {
+            foreach (var post in user.Posts)
+            {
+                if (post.whitelist.Contains(this))
+                {
+                    timelinePosts.Add(post);
+                }
+            }
         }
 
         timelinePosts.Sort((p1, p2) => p2.Timestamp.CompareTo(p1.Timestamp));
@@ -189,7 +205,7 @@ public class User
         return timelinePosts;
     }
 
-    public void DisplayPosts()
+    public void DisplayPosts(List<User> userList)
     {
         CurrentPostIndex = 0;
         Posts.Sort((p1, p2) => p2.Timestamp.CompareTo(p1.Timestamp));
@@ -211,7 +227,7 @@ public class User
             Posts[CurrentPostIndex].Display();
 
             Console.WriteLine("----------------------------------------menu----------------------------------------");
-            Console.WriteLine("1: Previous Post  2: View Comment  3: Edit Post  4: Next Post  5: Back to Main Menu");
+            Console.WriteLine("1: Previous Post  2: View Comment  3: View whitelist  4: Edit Post  5: Next Post  6: Back to Main Menu");
 
             Console.Write("\nWhat do you have to do? : ");
             string option = ConsoleHelper.ReadLineColoredText(ConsoleColor.Yellow);
@@ -239,6 +255,36 @@ public class User
                     else { Console.Clear(); }
                     break;
                 case "3":
+                    Console.WriteLine("\nwhitelist : ");
+                    if (Posts[CurrentPostIndex].whitelist.Count == 0)
+                    {
+                        ConsoleHelper.WriteLineColoredText("\nNo whitelist to display.", ConsoleColor.Red);
+                    }
+                    else
+                    {
+                        foreach (var user in Posts[CurrentPostIndex].whitelist)
+                        {
+                            ConsoleHelper.WriteLineColoredText("  " + user.username_, ConsoleColor.Yellow);
+                        }
+                    }
+                    Console.Write("\nDo you want to add a whitelist?(Y/N) : ");
+                    string ifwhitelist = ConsoleHelper.ReadLineColoredText(ConsoleColor.Yellow);
+
+                    if (string.Equals(ifwhitelist, "Y", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.Write("\nEnter User : ");
+                        string username = ConsoleHelper.ReadLineColoredText(ConsoleColor.Yellow);
+                        User user = userList.Find(u => u.username_ == username);
+                        if (user != null)
+                        {
+                            Posts[CurrentPostIndex].whitelist.Add(user);
+                            ConsoleHelper.WriteLineColoredText("\nWhitelist added successfully!\nPlease wait.\n", ConsoleColor.Green);
+                            Thread.Sleep(2000);
+                        }
+                        else { ConsoleHelper.WriteLineColoredText("\nUser not found.\nPlease wait.\n", ConsoleColor.Red);Thread.Sleep(2000); }
+                    }
+                    break;
+                case "4":
                     Console.Clear();
                     Console.WriteLine("▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄");
                     Console.WriteLine("░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░\n");
@@ -287,11 +333,11 @@ public class User
                         this.EditPost(Posts[CurrentPostIndex], newText, newIsPublic);
                     }
                     break;
-                case "4":
+                case "5":
                     Console.Clear();
                     CurrentPostIndex = Math.Min(Posts.Count - 1, CurrentPostIndex + 1);
                     break;
-                case "5":
+                case "6":
                     continueDisplay = false;
                     break;
                 default:
@@ -301,10 +347,10 @@ public class User
         }
     }
 
-    public void DisplayTimeline()
+    public void DisplayTimeline(List<User> userList)
     {
         CurrentPostIndex = 0;
-        List<Post> timelinePosts = GetTimelinePosts();
+        List<Post> timelinePosts = GetTimelinePosts(userList);
 
         bool continueDisplay = true;
 
@@ -320,11 +366,9 @@ public class User
                 return;
             }
 
-            if (!timelinePosts[CurrentPostIndex].IsPublic)
-            {
-                ConsoleHelper.WriteLineColoredText("This post is private.\n", ConsoleColor.Red);
-            }
-            else { timelinePosts[CurrentPostIndex].Display(); }
+            Post currentPost = timelinePosts[CurrentPostIndex];
+
+            currentPost.Display();
 
             Console.WriteLine("---------------------------------menu---------------------------------");
             Console.WriteLine("1: Previous Post  2: View Comment  3: Next Post  4: Back to Main Menu");
@@ -338,7 +382,7 @@ public class User
                     CurrentPostIndex = Math.Max(0, CurrentPostIndex - 1);
                     break;
                 case "2":
-                    foreach (var comment in timelinePosts[CurrentPostIndex].Comments)
+                    foreach (var comment in currentPost.Comments)
                     {
                         comment.Display();
                     }
@@ -348,7 +392,7 @@ public class User
                     {
                         Console.Write("\nEnter your comment : ");
                         string commentText = ConsoleHelper.ReadLineColoredText(ConsoleColor.Yellow);
-                        AddComment(timelinePosts[CurrentPostIndex], commentText);
+                        AddComment(currentPost, commentText);
                         ConsoleHelper.WriteLineColoredText("\nComment added successfully!\n", ConsoleColor.Green);
                     }
                     else { Console.Clear(); }
@@ -534,6 +578,7 @@ public class Post
     public string Content { get; set; }
     public DateTime Timestamp { get; set; }
     public List<Comment> Comments { get; set; } = new List<Comment>();
+    public List<User> whitelist { get; set; } = new List<User>();
     public bool IsPublic { get; set; }
 
     public Post(User user, string content, bool isPublic)
@@ -678,9 +723,8 @@ public class Ui
 
         while (success)
         {
-            Console.WriteLine("▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄");
-            Console.WriteLine("░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░\n");
-            Console.Write("                   You have an account?(Y/N) : ");
+            Logo(ConsoleColor.White);
+            Console.Write("                       You have an account?(Y/N) : ");
             string menu = ConsoleHelper.ReadLineColoredText(ConsoleColor.Yellow);
             Console.WriteLine();
 
@@ -768,19 +812,36 @@ public class Ui
         Console.WriteLine();
         return user_login;
     }
+
+    public static void Logo(ConsoleColor color)
+    {
+        Console.WriteLine("▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄");
+        Console.WriteLine("░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░\n");
+        ConsoleHelper.WriteLineColoredText("                      ████████╗░█████╗░░█████╗░░█████╗░\n" +
+                                           "                      ╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗\n" +
+                                           "                      ░░░██║░░░██║░░██║███████║██║░░██║\n" +
+                                           "                      ░░░██║░░░██║░░██║██╔══██║██║░░██║\n" +
+                                           "                      ░░░██║░░░╚█████╔╝██║░░██║╚█████╔╝\n" +
+                                           "                      ░░░╚═╝░░░░╚════╝░╚═╝░░╚═╝░╚════╝░\n", color);
+        Console.WriteLine("▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄");
+        Console.WriteLine("░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░\n");
+    }
 }
 
 public class Program
 {
     public static void Main(string[] args)
     {
+        Ui ui = new Ui();
         Console.Clear();
-        ConsoleHelper.WriteLineColoredText("Loading :--------------------: 0%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :--------------------: 0%", ConsoleColor.Blue);
         Thread.Sleep(100);
         Console.Clear();
+        Ui.Logo(ConsoleColor.Blue);
         Profile profileSarto = new Profile("Sarto", "...");
         Profile profileAof = new Profile("Aof", "...");
-        ConsoleHelper.WriteLineColoredText("Loading :██------------------: 10%", ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :██------------------: 10%", ConsoleColor.Blue);
         Thread.Sleep(100);
         Console.Clear();
 
@@ -788,18 +849,16 @@ public class Program
             new User("Sarto","1023",profileSarto),
             new User("Aof","1055",profileAof),
         };
-        List<User> RoomList = new List<User>
-        {
 
-        };
-
-        ConsoleHelper.WriteLineColoredText("Loading :████----------------: 20%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :████----------------: 20%", ConsoleColor.Blue);
         Thread.Sleep(100);
         Console.Clear();
 
         User User_Test_Sarto = userList.Find(u => u.username_ == "Sarto");
         User User_Test_Aof = userList.Find(u => u.username_ == "Aof");
-        ConsoleHelper.WriteLineColoredText("Loading :██████--------------: 30%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :██████--------------: 30%", ConsoleColor.Blue);
         Thread.Sleep(100);
 
         User_Test_Sarto?.AddTextPost(User_Test_Sarto, "This is my first text post!", isPublic: true);
@@ -807,25 +866,29 @@ public class Program
         Thread.Sleep(500);
         Console.Clear();
         User_Test_Aof?.AddTextPost(User_Test_Aof, "This is my private post!", isPublic: false);
-        ConsoleHelper.WriteLineColoredText("Loading :██████████----------: 50%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :██████████----------: 50%", ConsoleColor.Blue);
         Thread.Sleep(500);
         User_Test_Sarto?.AddImagePost(User_Test_Sarto, "https://i.pinimg.com/564x/53/7e/31/537e315ad64391e28765ef86ba555e67.jpg", isPublic: true);
         Console.Clear();
-        ConsoleHelper.WriteLineColoredText("Loading :████████████--------: 60%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :████████████--------: 60%", ConsoleColor.Blue);
         Thread.Sleep(500);
         User_Test_Sarto?.AddVideoPost(User_Test_Sarto, "https://youtu.be/dQw4w9WgXcQ", isPublic: true);
         Console.Clear();
-        ConsoleHelper.WriteLineColoredText("Loading :██████████████------: 70%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :██████████████------: 70%", ConsoleColor.Blue);
         Thread.Sleep(500);
         User_Test_Aof?.AddTextPost(User_Test_Aof, "Another post!", isPublic: true);
         Console.Clear();
-        ConsoleHelper.WriteLineColoredText("Loading :████████████████----: 80%", ConsoleColor.Blue);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :████████████████----: 80%", ConsoleColor.Blue);
         Thread.Sleep(100);
         Console.Clear();
 
-        Ui ui = new Ui();
-        ConsoleHelper.WriteLineColoredText("Loading :████████████████████: 100%", ConsoleColor.Blue);
-        ConsoleHelper.WriteLineColoredText("Successfully loaded", ConsoleColor.Green);
+        Ui.Logo(ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                     Loading :████████████████████: 100%", ConsoleColor.Blue);
+        ConsoleHelper.WriteLineColoredText("                               Successfully loaded", ConsoleColor.Green);
         Thread.Sleep(1000);
         Console.Clear();
         string user_login = ui.Login(userList);
@@ -840,8 +903,7 @@ public class Program
         {
             loggedInUser = userList.Find(u => u.username_ == user_login);
 
-            Console.WriteLine("▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄");
-            Console.WriteLine("░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░\n");
+            Ui.Logo(ConsoleColor.White);
             Console.Write("                          user login : ");
             ConsoleHelper.WriteLineColoredText(user_login, ConsoleColor.Yellow);
             Console.Write("                        New Messages : ");
@@ -861,10 +923,10 @@ public class Program
             switch (menu)
             {
                 case "1":
-                    loggedInUser?.DisplayTimeline();
+                    loggedInUser?.DisplayTimeline(userList);
                     break;
                 case "2":
-                    loggedInUser?.DisplayPosts();
+                    loggedInUser?.DisplayPosts(userList);
                     break;
                 case "3":
                     loggedInUser?.PostMenu(loggedInUser);
@@ -987,7 +1049,12 @@ public class Program
                     user_login = ui.Login(userList);
                     break;
                 default:
-                    ConsoleHelper.WriteLineColoredText("                                     End", ConsoleColor.Red);
+                    ConsoleHelper.WriteLineColoredText("                         ███████╗███╗░░██╗██████╗░\n" +
+                                                       "                         ██╔════╝████╗░██║██╔══██╗\n" +
+                                                       "                         █████╗░░██╔██╗██║██║░░██║\n" +
+                                                       "                         ██╔══╝░░██║╚████║██║░░██║\n" +
+                                                       "                         ███████╗██║░╚███║██████╔╝\n" +
+                                                       "                         ╚══════╝╚═╝░░╚══╝╚═════╝░\n", ConsoleColor.Red);
                     Console.WriteLine("▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ▄▄");
                     Console.WriteLine("░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░ ░░\n");
                     return;
